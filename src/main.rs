@@ -1,7 +1,7 @@
-use std::time::Duration;
+use std::{fmt::Display, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
-use chrono::Timelike;
+use chrono::{Datelike, Timelike};
 use clap::Parser;
 
 #[derive(clap::Parser)]
@@ -34,6 +34,101 @@ enum Command {
         #[arg(long, default_value = "true")]
         date: bool,
     },
+}
+
+#[derive(Default)]
+pub struct PangoSpan {
+    pub color: Option<String>,
+    pub font_family: Option<String>,
+    pub font_size: Option<String>,
+    pub weight: Option<String>,
+}
+
+impl Display for PangoSpan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<span ")?;
+        if let Some(color) = &self.color {
+            write!(f, "color=\"{}\" ", color)?;
+        }
+        if let Some(font_family) = &self.font_family {
+            write!(f, "font_family=\"{}\" ", font_family)?;
+        }
+        if let Some(font_size) = &self.font_size {
+            write!(f, "font_size=\"{}\" ", font_size)?;
+        }
+        if let Some(weight) = &self.weight {
+            write!(f, "weight=\"{}\" ", weight)?;
+        }
+        write!(f, ">")?;
+        Ok(())
+    }
+}
+
+macro_rules! pango {
+    ($text: expr, $($key:ident = $value:expr),* $(,)?) => {{
+        let span = PangoSpan {
+            $($key: Some($value.to_string()),)*
+            ..PangoSpan::default()
+        };
+        let mut s = span.to_string();
+        s.push_str(&format!("{}</span>", $text));
+        s
+    }};
+}
+
+pub struct Theme {
+    pub foreground: String,
+    pub background: String,
+    pub black: String,
+    pub red: String,
+    pub green: String,
+    pub yellow: String,
+    pub blue: String,
+    pub magenta: String,
+    pub cyan: String,
+    pub white: String,
+    pub index_16: String,
+    pub index_17: String,
+}
+
+macro_rules! impl_theme_color {
+    ($name: ident) => {
+        pub fn $name(&self) -> &str {
+            &self.$name
+        }
+    };
+}
+
+impl Theme {
+    impl_theme_color!(foreground);
+    impl_theme_color!(background);
+    impl_theme_color!(black);
+    impl_theme_color!(red);
+    impl_theme_color!(green);
+    impl_theme_color!(yellow);
+    impl_theme_color!(blue);
+    impl_theme_color!(magenta);
+    impl_theme_color!(cyan);
+    impl_theme_color!(white);
+    impl_theme_color!(index_16);
+    impl_theme_color!(index_17);
+
+    pub fn tokyonight_normal() -> Self {
+        Self {
+            foreground: "#c0caf5".to_string(),
+            background: "#1a1b26".to_string(),
+            black: "#15161e".to_string(),
+            red: "#f7768e".to_string(),
+            green: "#9ece6a".to_string(),
+            yellow: "#e0af68".to_string(),
+            blue: "#7aa2f7".to_string(),
+            magenta: "#bb9af7".to_string(),
+            cyan: "#7dcfff".to_string(),
+            white: "#a9b1d6".to_string(),
+            index_16: "#ff9e64".to_string(),
+            index_17: "#db4b4b".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -128,6 +223,7 @@ fn get_battery_info(device_path: &str) -> Result<BatteryInfo> {
 
 fn main() -> Result<()> {
     use Command::*;
+    let theme = Theme::tokyonight_normal();
     let command = Cli::parse().command;
     match command {
         Battery { device_path, debug } => {
@@ -151,15 +247,16 @@ fn main() -> Result<()> {
                 }
             };
             println!(
-                "{icon} {pct}% ({time} {state})",
-                icon = icon,
-                pct = battery_info.percentage(),
-                time = battery_info.time_to_empty_full_str(),
-                state = if battery_info.state == BatteryState::Charging {
-                    "until full"
-                } else {
-                    "remaining"
-                }
+                "{icon} {pct}{pct_sign} {time}",
+                icon = pango!(icon, font_size = "120%"),
+                pct = pango!(
+                    battery_info.percentage(),
+                    color = theme.foreground(),
+                    weight = "ultrabold",
+                    font_size = "110%",
+                ),
+                pct_sign = pango!("%", color = theme.white()),
+                time = pango!(battery_info.time_to_empty_full_str(), color = theme.white()),
             );
             Ok(())
         }
@@ -204,10 +301,43 @@ fn main() -> Result<()> {
             };
             if date {
                 println!(
-                    "{date} {} {}",
-                    time_str,
-                    time_of_day,
-                    date = time.format("%Y年%m月%d日"),
+                    "{date} {time} {tod}",
+                    time = pango!(
+                        time_str,
+                        color = theme.foreground(),
+                        weight = "ultrabold",
+                        font_size = "120%",
+                    ),
+                    tod = pango!(time_of_day, color = theme.white(),),
+                    date = {
+                        let y = time.year();
+                        let m = time.month();
+                        let d = time.day();
+                        format!(
+                            "{y}{nian}{m}{yue}{d}{ri}",
+                            y = pango!(
+                                y,
+                                color = theme.foreground(),
+                                font_size = "110%",
+                                weight = "ultrabold"
+                            ),
+                            m = pango!(
+                                m,
+                                color = theme.foreground(),
+                                font_size = "110%",
+                                weight = "ultrabold"
+                            ),
+                            d = pango!(
+                                d,
+                                color = theme.foreground(),
+                                font_size = "110%",
+                                weight = "ultrabold"
+                            ),
+                            nian = pango!("年", color = theme.white()),
+                            yue = pango!("月", color = theme.white()),
+                            ri = pango!("日", color = theme.white()),
+                        )
+                    },
                 );
             } else {
                 println!("{} {}", time_str, time_of_day);
