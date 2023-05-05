@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
+use chrono::Timelike;
 use clap::Parser;
 
 #[derive(clap::Parser)]
@@ -18,6 +19,20 @@ enum Command {
         device_path: String,
         #[arg(long, default_value = "false")]
         debug: bool,
+    },
+    #[command()]
+    Time {
+        #[arg(long, default_value = "false")]
+        seconds: bool,
+        #[arg(long, default_value = "true")]
+        date: bool,
+    },
+    #[command()]
+    TimeZh {
+        #[arg(long, default_value = "false")]
+        seconds: bool,
+        #[arg(long, default_value = "true")]
+        date: bool,
     },
 }
 
@@ -139,6 +154,57 @@ fn main() -> Result<()> {
                     "remaining"
                 }
             );
+            Ok(())
+        }
+        Time { seconds, date } => {
+            let time = chrono::Local::now();
+            let time_str = if seconds {
+                time.format("%H:%M:%S")
+            } else {
+                time.format("%H:%M")
+            };
+            let time_of_day = match time.hour() {
+                0..=11 => "AM",
+                12..=23 => "PM",
+                _ => unreachable!(),
+            };
+            if date {
+                println!(
+                    "{date} {time} {}",
+                    time_of_day,
+                    date = time.format("%Y-%m-%d"),
+                    time = time_str,
+                );
+            } else {
+                println!("{} {}", time_str, time_of_day);
+            }
+            Ok(())
+        }
+        TimeZh { seconds, date } => {
+            let time = chrono::Local::now();
+            let time_str = if seconds {
+                time.format("%H:%M:%S")
+            } else {
+                time.format("%H:%M")
+            };
+            let time_of_day = match time.hour() {
+                0..=5 => "凌晨",
+                6..=11 => "上午",
+                12..=13 => "中午",
+                14..=17 => "下午",
+                18..=23 => "晚上",
+                _ => unreachable!(),
+            };
+            if date {
+                println!(
+                    "{date} {} {}",
+                    time_str,
+                    time_of_day,
+                    date = time.format("%Y年%m月%d日"),
+                );
+            } else {
+                println!("{} {}", time_str, time_of_day);
+            }
             Ok(())
         }
     }
