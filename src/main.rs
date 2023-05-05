@@ -91,14 +91,21 @@ fn get_battery_info(device_path: &str) -> Result<BatteryInfo> {
         .nth(1)
         .ok_or_else(|| anyhow!("energy format is invalid"))?
         .parse::<f64>()?;
-    let time_to_empty_full = output
+    let mut time_to_line = output
         .lines()
         .find(|line| line.trim_start().starts_with("time to"))
         .ok_or_else(|| anyhow!("`time to {{empty | full}}` not found"))?
-        .split_whitespace()
+        .split_whitespace();
+    let mut time_to_empty_full = time_to_line
         .nth(3)
         .ok_or_else(|| anyhow!("`time to {{empty | full}}` format is invalid"))?
         .parse::<f64>()?;
+    let time_to_empty_full_unit = time_to_line
+        .nth(0)
+        .ok_or_else(|| anyhow!("`time to {{empty | full}}` format is invalid"))?;
+    if time_to_empty_full_unit == "minutes" {
+        time_to_empty_full /= 60.0;
+    }
     let state = output
         .lines()
         .find(|line| line.trim_start().starts_with("state:"))
