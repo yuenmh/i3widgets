@@ -34,6 +34,8 @@ enum Command {
         #[arg(long, default_value = "true")]
         date: bool,
     },
+    #[command()]
+    Memory,
 }
 
 #[derive(Default)]
@@ -221,6 +223,42 @@ fn get_battery_info(device_path: &str) -> Result<BatteryInfo> {
     })
 }
 
+struct MemoryInfo {
+    total: u64,
+    used: u64,
+}
+
+impl MemoryInfo {
+    pub fn total_mib(&self) -> u64 {
+        self.total / 1024
+    }
+
+    pub fn used_mib(&self) -> u64 {
+        self.used / 1024
+    }
+}
+
+fn get_memory_info() -> Result<MemoryInfo> {
+    let result = std::process::Command::new("free")
+        .output()
+        .context("running `free`")?;
+    let output = String::from_utf8(result.stdout).context("converting `free` output to utf-8")?;
+    let line = output
+        .lines()
+        .nth(1)
+        .ok_or_else(|| anyhow!("`free` output is invalid"))?;
+    let mut fields = line.split_whitespace();
+    let total = fields
+        .nth(1)
+        .ok_or_else(|| anyhow!("`free` output is invalid"))?
+        .parse::<u64>()?;
+    let used = fields
+        .next()
+        .ok_or_else(|| anyhow!("`free` output is invalid"))?
+        .parse::<u64>()?;
+    Ok(MemoryInfo { total, used })
+}
+
 fn main() -> Result<()> {
     use Command::*;
     let theme = Theme::tokyonight_normal();
@@ -342,6 +380,27 @@ fn main() -> Result<()> {
             } else {
                 println!("{} {}", time_str, time_of_day);
             }
+            Ok(())
+        }
+        Memory => {
+            let memory_info = get_memory_info()?;
+            println!(
+                "{used}{div}{total}{mib}",
+                used = pango!(
+                    memory_info.used_mib(),
+                    color = theme.foreground(),
+                    weight = "ultrabold",
+                    font_size = "110%",
+                ),
+                total = pango!(
+                    memory_info.total_mib(),
+                    color = theme.foreground(),
+                    weight = "ultrabold",
+                    font_size = "110%",
+                ),
+                div = pango!("/", color = theme.white()),
+                mib = pango!("MiB", color = theme.white()),
+            );
             Ok(())
         }
     }
