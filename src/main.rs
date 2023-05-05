@@ -119,14 +119,14 @@ fn main() -> Result<()> {
                     return Ok(());
                 }
             };
-            let icon = if battery_info.state == BatteryState::Discharging {
+            let icon = if battery_info.state == BatteryState::Charging {
+                "🔌"
+            } else {
                 if battery_info.percentage() >= 20 {
                     "🔋"
                 } else {
                     "🪫"
                 }
-            } else {
-                "🔌"
             };
             println!(
                 "{icon} {pct}% ({time} {state})",
