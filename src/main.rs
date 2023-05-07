@@ -36,6 +36,8 @@ enum Command {
     },
     #[command()]
     Memory,
+    #[command()]
+    SinkVolume,
 }
 
 #[derive(Default)]
@@ -259,6 +261,79 @@ fn get_memory_info() -> Result<MemoryInfo> {
     Ok(MemoryInfo { total, used })
 }
 
+pub mod pulseaudio {
+    use anyhow::{anyhow, Result};
+
+    pub struct Volume {
+        left: u64,
+        right: u64,
+        mute: bool,
+    }
+
+    impl Volume {
+        pub fn left_pct(&self) -> u64 {
+            self.left * 100 / 65530 // not std::u16::MAX for some reason
+        }
+
+        pub fn right_pct(&self) -> u64 {
+            self.right * 100 / 65530 // not std::u16::MAX for some reason
+        }
+
+        fn icon(value: u64, mute: bool) -> &'static str {
+            if mute {
+                return "🔇";
+            }
+            match value {
+                0 => "🔇",
+                1..=33 => "🔈",
+                34..=66 => "🔉",
+                _ => "🔊",
+            }
+        }
+
+        pub fn left_icon(&self) -> &'static str {
+            Self::icon(self.left_pct(), self.mute)
+        }
+
+        pub fn right_icon(&self) -> &'static str {
+            Self::icon(self.right_pct(), self.mute)
+        }
+    }
+
+    pub fn volume() -> Result<Volume> {
+        let result = std::process::Command::new("pactl")
+            .arg("get-sink-volume")
+            .arg("@DEFAULT_SINK@")
+            .output()?;
+        let output = String::from_utf8(result.stdout)?;
+        let line = output
+            .lines()
+            .next()
+            .ok_or_else(|| anyhow!("`pactl` output is invalid"))?;
+        let mut fields = line.split_whitespace();
+        // Volume: front-left: 65530 / 100% / -0.00 dB,   front-right: 65530 / 100% / -0.00 dB
+        let left = fields
+            .nth(2)
+            .ok_or_else(|| anyhow!("`pactl` output is invalid"))?
+            .parse::<u64>()?;
+        let right = fields
+            .nth(6)
+            .ok_or_else(|| anyhow!("`pactl` output is invalid"))?
+            .parse::<u64>()?;
+        let result = std::process::Command::new("pactl")
+            .arg("get-sink-mute")
+            .arg("@DEFAULT_SINK@")
+            .output()?;
+        let output = String::from_utf8(result.stdout)?;
+        let line = output
+            .lines()
+            .next()
+            .ok_or_else(|| anyhow!("`pactl` output is invalid"))?;
+        let mute = line.contains("yes");
+        Ok(Volume { left, right, mute })
+    }
+}
+
 fn main() -> Result<()> {
     use Command::*;
     let theme = Theme::tokyonight_normal();
@@ -400,6 +475,21 @@ fn main() -> Result<()> {
                 ),
                 div = pango!("/", color = theme.white()),
                 mib = pango!("MiB", color = theme.white()),
+            );
+            Ok(())
+        }
+        SinkVolume => {
+            let volume_info = pulseaudio::volume()?;
+            println!(
+                "{icon} {left}{pct}",
+                icon = pango!(volume_info.left_icon(), font_size = "120%"),
+                left = pango!(
+                    volume_info.left_pct(),
+                    color = theme.foreground(),
+                    weight = "ultrabold",
+                    font_size = "110%",
+                ),
+                pct = pango!("%", color = theme.white()),
             );
             Ok(())
         }
