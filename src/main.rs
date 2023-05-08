@@ -406,7 +406,11 @@ fn main() -> Result<()> {
         } => {
             let time = chrono::Local::now();
             let time_str = {
-                let h = time.hour() % if am_pm { 12 } else { 24 };
+                let mut h = time.hour() % if am_pm { 12 } else { 24 };
+                // 12-hour clock 0:00 => 12:00, but in 24 hour clock 0:00 => 0:00
+                if h == 0 && am_pm {
+                    h = 12;
+                }
                 let m = time.minute();
                 let s = time.second();
                 if seconds {
