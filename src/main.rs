@@ -33,6 +33,8 @@ enum Command {
         seconds: bool,
         #[arg(long, default_value = "true")]
         date: bool,
+        #[arg(long, default_value = "true")]
+        am_pm: bool,
     },
     #[command()]
     Memory,
@@ -397,12 +399,21 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        TimeZh { seconds, date } => {
+        TimeZh {
+            seconds,
+            date,
+            am_pm,
+        } => {
             let time = chrono::Local::now();
-            let time_str = if seconds {
-                time.format("%H:%M:%S")
-            } else {
-                time.format("%H:%M")
+            let time_str = {
+                let h = time.hour() % if am_pm { 12 } else { 24 };
+                let m = time.minute();
+                let s = time.second();
+                if seconds {
+                    format!("{:02}:{:02}:{:02}", h, m, s)
+                } else {
+                    format!("{:02}:{:02}", h, m)
+                }
             };
             let time_of_day = match time.hour() {
                 0..=5 => "凌晨",
