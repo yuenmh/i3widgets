@@ -40,6 +40,8 @@ enum Command {
     Memory,
     #[command()]
     SinkVolume,
+    #[command()]
+    Brightness,
 }
 
 #[derive(Default)]
@@ -336,6 +338,58 @@ pub mod pulseaudio {
     }
 }
 
+pub mod brightness {
+    use anyhow::Result;
+
+    pub struct BrightnessInfo {
+        pub current: u64,
+        pub max: u64,
+    }
+
+    impl BrightnessInfo {
+        pub fn pct(&self) -> u64 {
+            self.current * 100 / self.max
+        }
+
+        pub fn icon(&self) -> &'static str {
+            match self.pct() {
+                0 => "🌑",
+                1..=33 => "🌒",
+                34..=66 => "🌓",
+                67..=99 => "🌔",
+                _ => "🌕",
+            }
+        }
+    }
+
+    pub fn info() -> Result<BrightnessInfo> {
+        let result = std::process::Command::new("brightnessctl")
+            .arg("info")
+            .output()?;
+        let output = String::from_utf8(result.stdout).unwrap();
+        // Default max 1 to avoid div by 0
+        let mut out = BrightnessInfo { current: 0, max: 1 };
+        for line in output.lines() {
+            if line.trim_start().starts_with("Current brightness:") {
+                out.current = line
+                    .split_whitespace()
+                    .nth(2)
+                    .unwrap()
+                    .parse::<u64>()
+                    .unwrap();
+            } else if line.trim_start().starts_with("Max brightness:") {
+                out.max = line
+                    .split_whitespace()
+                    .nth(2)
+                    .unwrap()
+                    .parse::<u64>()
+                    .unwrap();
+            }
+        }
+        Ok(out)
+    }
+}
+
 fn main() -> Result<()> {
     use Command::*;
     let theme = Theme::tokyonight_normal();
@@ -500,6 +554,21 @@ fn main() -> Result<()> {
                 icon = pango!(volume_info.left_icon(), font_size = "120%"),
                 left = pango!(
                     volume_info.left_pct(),
+                    color = theme.foreground(),
+                    weight = "ultrabold",
+                    font_size = "110%",
+                ),
+                pct = pango!("%", color = theme.white()),
+            );
+            Ok(())
+        }
+        Brightness => {
+            let brightness_info = brightness::info()?;
+            println!(
+                "{icon} {value}{pct}",
+                icon = pango!(brightness_info.icon(), font_size = "120%"),
+                value = pango!(
+                    brightness_info.pct(),
                     color = theme.foreground(),
                     weight = "ultrabold",
                     font_size = "110%",
