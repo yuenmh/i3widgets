@@ -42,6 +42,8 @@ enum Command {
     SinkVolume,
     #[command()]
     Brightness,
+    #[command()]
+    VirshActive,
 }
 
 #[derive(Default)]
@@ -390,6 +392,46 @@ pub mod brightness {
     }
 }
 
+pub mod virsh {
+    use anyhow::{anyhow, Result};
+    /// Represents the state returned by the virsh list command
+    #[allow(dead_code)]
+    #[derive(Debug)]
+    pub struct State {
+        /// the active vms
+        active: Vec<String>,
+        /// the inactive vms
+        inactive: Vec<String>,
+    }
+
+    pub fn list() -> Result<State> {
+        let result = std::process::Command::new("virsh")
+            .arg("list")
+            .arg("--all")
+            .output()?;
+        let output = String::from_utf8(result.stdout).unwrap();
+        let mut active = Vec::new();
+        let mut inactive = Vec::new();
+        for line in output.trim().lines().skip(2) {
+            let mut fields = line.trim_start().split_whitespace();
+            // skip the id
+            fields.next();
+            // FIXME: assume that the name has no spaces
+            let name = fields
+                .next()
+                .ok_or_else(|| anyhow!("invalid format"))?
+                .to_string();
+            let state = fields.next().ok_or_else(|| anyhow!("invalid format"))?;
+            match state {
+                "running" => active.push(name),
+                "shut" => inactive.push(name),
+                _ => {}
+            }
+        }
+        Ok(State { active, inactive })
+    }
+}
+
 fn main() -> Result<()> {
     use Command::*;
     let theme = Theme::tokyonight_normal();
@@ -575,6 +617,11 @@ fn main() -> Result<()> {
                 ),
                 pct = pango!("%", color = theme.white()),
             );
+            Ok(())
+        }
+        VirshActive => {
+            let state = virsh::list()?;
+            print!("{state:?}");
             Ok(())
         }
     }
